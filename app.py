@@ -2,7 +2,7 @@ import streamlit as st
 from PIL import Image, ImageDraw, ImageFont
 import qrcode
 import io
-from datetime import datetime
+from datetime import datetime, timedelta
 import base64
 
 # LOT NO 변환 함수
@@ -119,7 +119,8 @@ if submitted:
     prod_date_str = prod_date.strftime("%Y/%m/%d")
     delivery_date_str = delivery_date.strftime("%Y/%m/%d")
     lot_no = convert_lot_no(prod_date_str)
-    serial_no = datetime.now().strftime("%y%m%d%H%M%S")
+    korea_time = datetime.utcnow() + timedelta(hours=9)
+    serial_no = korea_time.strftime("%y%m%d%H%M%S")
 
     img, qr_text = generate_label_image(
         company, code, prod_date_str, lot_no, serial_no,
