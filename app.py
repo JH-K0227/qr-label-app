@@ -1,4 +1,3 @@
-# app_test.py
 import streamlit as st
 from PIL import Image, ImageDraw, ImageFont
 import qrcode
@@ -159,7 +158,6 @@ if submitted:
     ws["B7"] = delivery_date_str
     ws["C1"] = code
 
-# 셀 크기 기반 QR 이미지 생성 및 중앙 배치 + 테두리 추가
     import tempfile
     tmp_qr_path = tempfile.NamedTemporaryFile(delete=False, suffix=".png").name
     from PIL import ImageDraw
@@ -168,7 +166,7 @@ if submitted:
     qr_height_px = 145  # 행 높이 18 * 6 * 1.33
 
     qr_img = qrcode.make(qr_text)
-    qr_img = qr_img.resize((qr_width_px - 4, qr_height_px - 4))  # 안쪽 여백 확보
+    qr_img = qr_img.resize((qr_width_px - 4, qr_height_px - 4))
 
     final_img = Image.new("RGB", (qr_width_px, qr_height_px), "white")
     draw = ImageDraw.Draw(final_img)
@@ -185,7 +183,6 @@ if submitted:
 
     ws.add_image(img_for_excel, "C2")
 
-    # QR코드 구성 텍스트를 병합 셀 A8:B8:C8에 삽입
     ws.merge_cells("A8:C8")
     ws["A8"] = qr_text
 
