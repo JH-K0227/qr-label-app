@@ -1,3 +1,4 @@
+# app_test.py
 import streamlit as st
 from PIL import Image, ImageDraw, ImageFont
 import qrcode
@@ -29,7 +30,7 @@ def generate_label_image(company, code, prod_date, lot_no, serial_no, item_no, s
     font_path = "NanumGothic.ttf"
     font = ImageFont.truetype(font_path, 18)
 
-    width, height = 600, 440
+    width, height = 600, 335  # 여백을 줄이기 위해 전체 이미지 높이 감소
     label_img = Image.new("RGB", (width, height), "white")
     draw = ImageDraw.Draw(label_img)
 
@@ -80,17 +81,39 @@ def generate_label_image(company, code, prod_date, lot_no, serial_no, item_no, s
     center_text("납품일자", x1, y[6], x2, y[7])
     center_text(delivery_date, x2, y[6], x3, y[7])
 
-    # QR 코드
+    # QR 코드 생성
     qr_data = f"{lot_no}{serial_no}{code}#{item_no}#{qty}#{order_no}"
-    qr_img = qrcode.make(qr_data).resize((x4 - x3 - 10, y[7] - y[1] - 10))
-    draw.rectangle([(x3, y[1]), (x4, y[7])], fill="white")  # 배경 초기화
-    draw.rectangle([(x3, y[1]), (x4, y[7])], outline="black", width=2)  # 외곽선 추가
-    qr_x = x3 + 5
-    qr_y = y[1] + 5
+    qr = qrcode.QRCode(
+        version=None,
+        error_correction=qrcode.constants.ERROR_CORRECT_M,
+        box_size=10,
+        border=1
+    )
+    qr.add_data(qr_data)
+    qr.make(fit=True)
+    qr_img = qr.make_image(fill_color="black", back_color="white").convert("RGB")
+
+    cell_left, cell_top = x3, y[1]
+    cell_right, cell_bottom = x4, y[7]
+    cell_width = cell_right - cell_left
+    cell_height = cell_bottom - cell_top
+
+    qr_target_size = min(cell_width, cell_height) - 10
+    qr_img = qr_img.resize((qr_target_size, qr_target_size))
+    qr_x = cell_left + (cell_width - qr_target_size) // 2
+    qr_y = cell_top + (cell_height - qr_target_size) // 2
+
+    draw.rectangle([(cell_left, cell_top), (cell_right, cell_bottom)], fill="white")
+    draw.rectangle([(cell_left, cell_top), (cell_right, cell_bottom)], outline="black", width=2)
     label_img.paste(qr_img, (qr_x, qr_y))
 
-    # QR 데이터 문자열
-    draw.text((x1, y[7] + 10), qr_data, font=font, fill="black")
+    # QR 문자열 위치 - 표 하단 기준으로 배치
+    qr_text_bbox = font.getbbox(qr_data)
+    qr_text_w = qr_text_bbox[2] - qr_text_bbox[0]
+    qr_text_h = qr_text_bbox[3] - qr_text_bbox[1]
+    qr_text_x = (width - qr_text_w) // 2
+    qr_text_y = y[7] + 5  # 여백 줄이기 위해 10 -> 5
+    draw.text((qr_text_x, qr_text_y), qr_data, font=font, fill="black")
 
     return label_img, qr_data
 
@@ -98,7 +121,7 @@ def generate_label_image(company, code, prod_date, lot_no, serial_no, item_no, s
 logo = Image.open("logo.png")
 st.image(logo, width=100)
 
-st.title("QR 부품 식별표 생성기")
+st.title("[테스트용] QR 부품 식별표 생성기")
 
 with st.form("label_form"):
     col1, col2 = st.columns(2)
