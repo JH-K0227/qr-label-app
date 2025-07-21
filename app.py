@@ -3,11 +3,10 @@ from PIL import Image, ImageDraw, ImageFont
 import qrcode
 import io
 from datetime import datetime, timedelta
-import base64
 import openpyxl
 from openpyxl.drawing.image import Image as ExcelImage
 import tempfile
-import os
+from math import ceil
 
 # LOT NO 변환 함수
 def convert_lot_no(date_str):
@@ -102,101 +101,135 @@ def generate_label_image(company, code, prod_date, lot_no, serial_no, item_no, s
 # Streamlit UI
 logo = Image.open("logo.png")
 st.image(logo, width=100)
+st.title("[테스트용] 다중 QR 부품 식별표 생성기")
 
-st.title("[테스트용] QR 부품 식별표 생성기")
+num_labels = st.number_input("생성할 라벨 개수 선택", min_value=1, max_value=10, value=1, step=1)
+label_data_list = []
 
 with st.form("label_form"):
-    col1, col2 = st.columns(2)
-    with col1:
-        company = st.text_input("업체명")
-        item_no = st.text_input("품번")
-        spec = st.text_input("부품규격")
-        qty = st.text_input("수량")
-    with col2:
-        code = st.text_input("업체코드")
-        prod_date = st.date_input("생산일자", format="YYYY/MM/DD")
-        delivery_date = st.date_input("납품일자", format="YYYY/MM/DD")
-        order_no = st.text_input("발주번호")
+    for i in range(num_labels):
+        st.markdown(f"### ▶ 라벨 {i+1}")
+        col1, col2 = st.columns(2)
+        with col1:
+            company = st.text_input("업체명", key=f"company_{i}")
+            item_no = st.text_input("품번", key=f"item_no_{i}")
+            spec = st.text_input("부품규격", key=f"spec_{i}")
+            qty = st.text_input("수량", key=f"qty_{i}")
+        with col2:
+            code = st.text_input("업체코드", key=f"code_{i}")
+            prod_date = st.date_input("생산일자", format="YYYY/MM/DD", key=f"prod_date_{i}")
+            delivery_date = st.date_input("납품일자", format="YYYY/MM/DD", key=f"delivery_date_{i}")
+            order_no = st.text_input("발주번호", key=f"order_no_{i}")
+
+        label_data_list.append({
+            "company": company,
+            "item_no": item_no,
+            "spec": spec,
+            "qty": qty,
+            "code": code,
+            "prod_date": prod_date,
+            "delivery_date": delivery_date,
+            "order_no": order_no
+        })
 
     submitted = st.form_submit_button("라벨 생성하기")
 
 if submitted:
-    prod_date_str = prod_date.strftime("%Y/%m/%d")
-    delivery_date_str = delivery_date.strftime("%Y/%m/%d")
-    lot_no = convert_lot_no(prod_date_str)
-    korea_time = datetime.utcnow() + timedelta(hours=9)
-    serial_no = korea_time.strftime("%y%m%d%H%M%S")
+    base_time = datetime.utcnow() + timedelta(hours=9)
+    images = []
+    qr_texts = []
 
-    img, qr_text = generate_label_image(
-        company, code, prod_date_str, lot_no, serial_no,
-        item_no, spec, qty, delivery_date_str, order_no
-    )
+    for i, data in enumerate(label_data_list):
+        serial_no = (base_time + timedelta(seconds=i)).strftime("%y%m%d%H%M%S")
+        prod_date_str = data["prod_date"].strftime("%Y/%m/%d")
+        delivery_date_str = data["delivery_date"].strftime("%Y/%m/%d")
+        lot_no = convert_lot_no(prod_date_str)
 
-    st.image(img, caption="생성된 라벨 미리보기", use_container_width=False)
+        img, qr_text = generate_label_image(
+            data["company"], data["code"], prod_date_str, lot_no, serial_no,
+            data["item_no"], data["spec"], data["qty"], delivery_date_str, data["order_no"]
+        )
 
+        images.append(img)
+        qr_texts.append((qr_text, data, prod_date_str, delivery_date_str, lot_no, serial_no))
+
+    # PNG 미리보기 및 다운로드
+    cols = 2
+    rows = ceil(len(images) / cols)
+    label_w, label_h = images[0].size
+    merged_img = Image.new("RGB", (label_w * cols, label_h * rows), "white")
+
+    for idx, img in enumerate(images):
+        x = (idx % cols) * label_w
+        y = (idx // cols) * label_h
+        merged_img.paste(img, (x, y))
+
+    st.image(merged_img, caption="전체 라벨 미리보기", use_container_width=False)
     buffered = io.BytesIO()
-    img.save(buffered, format="PNG")
+    merged_img.save(buffered, format="PNG")
+    st.download_button("📄 전체 라벨 PNG 다운로드", data=buffered.getvalue(), file_name="labels_all.png", mime="image/png")
 
-    st.download_button(
-        label="라벨 이미지 다운로드",
-        data=buffered.getvalue(),
-        file_name="label.png",
-        mime="image/png"
-    )
-
-    # --- 엑셀 템플릿 기반 라벨 생성 및 다운로드 ---
+    # 엑셀 저장
     template_path = "라벨 엑셀 양식.xlsx"
     wb = openpyxl.load_workbook(template_path)
     ws = wb.active
 
-    ws["B1"] = company
-    ws["B2"] = prod_date_str
-    ws["B3"] = item_no
-    ws["B4"] = spec
-    ws["B5"] = lot_no
-    ws["B6"] = qty
-    ws["B7"] = delivery_date_str
-    ws["C1"] = code
+    for i, (qr_text, data, prod_date_str, delivery_date_str, lot_no, serial_no) in enumerate(qr_texts):
+        row_base = (i // 2) * 9
+        is_left = (i % 2 == 0)
 
-    import tempfile
-    tmp_qr_path = tempfile.NamedTemporaryFile(delete=False, suffix=".png").name
-    from PIL import ImageDraw
+        col_offset = 0 if is_left else 4
+        col_letter_code = 'C' if is_left else 'G'
+        text_merge_range = f"{'A' if is_left else 'E'}{8 + row_base}:{'C' if is_left else 'G'}{8 + row_base}"
+        col = lambda c: chr(ord('A') + ord(c) - ord('A') + col_offset)
 
-    qr_width_px = 136  # C열 너비 16.25 * 7.5
-    qr_height_px = 145  # 행 높이 18 * 6 * 1.33
+        ws[f"{col('B')}{1 + row_base}"] = data["company"]
+        ws[f"{col('B')}{2 + row_base}"] = prod_date_str
+        ws[f"{col('B')}{3 + row_base}"] = data["item_no"]
+        ws[f"{col('B')}{4 + row_base}"] = data["spec"]
+        ws[f"{col('B')}{5 + row_base}"] = lot_no
+        ws[f"{col('B')}{6 + row_base}"] = data["qty"]
+        ws[f"{col('B')}{7 + row_base}"] = delivery_date_str
+        ws[f"{col_letter_code}{1 + row_base}"] = data["code"]
+        ws.merge_cells(f"{col_letter_code}{2 + row_base}:{col_letter_code}{7 + row_base}")
 
-    qr_img = qrcode.make(qr_text)
-    qr_img = qr_img.resize((qr_width_px - 4, qr_height_px - 4))
+        cm_to_px = lambda cm: int(cm * 96 / 2.54)
+        target_width = cm_to_px(3.63)
+        target_height = cm_to_px(3.77)
+        qr_img = qrcode.make(qr_text).resize((target_width, target_height))
 
-    final_img = Image.new("RGB", (qr_width_px, qr_height_px), "white")
-    draw = ImageDraw.Draw(final_img)
-    draw.rectangle([(0, 0), (qr_width_px - 1, qr_height_px - 1)], outline="black", width=1)
+        final_img = Image.new("RGB", (target_width, target_height), "white")
+        draw = ImageDraw.Draw(final_img)
+        offset_x = (target_width - qr_img.width) // 2
+        offset_y = (target_height - qr_img.height) // 2
+        final_img.paste(qr_img, (offset_x, offset_y))
+        draw.rectangle([(0, 0), (target_width - 1, target_height - 1)], outline="black", width=1)
 
-    offset_x = (qr_width_px - qr_img.width) // 2
-    offset_y = (qr_height_px - qr_img.height) // 2
-    final_img.paste(qr_img, (offset_x, offset_y))
+        tmp_qr_path = tempfile.NamedTemporaryFile(delete=False, suffix=".png").name
+        final_img.save(tmp_qr_path)
+        img_for_excel = ExcelImage(tmp_qr_path)
+        img_for_excel.width = target_width
+        img_for_excel.height = target_height
+        ws.add_image(img_for_excel, f"{col_letter_code}{2 + row_base}")
+        ws.merge_cells(text_merge_range)
+        ws[text_merge_range.split(":")[0]] = qr_text
 
-    final_img.save(tmp_qr_path)
-    img_for_excel = ExcelImage(tmp_qr_path)
-    img_for_excel.width = qr_width_px
-    img_for_excel.height = qr_height_px
+    # 미사용 라벨 행 삭제 처리
+    used_blocks = (len(qr_texts) + 1) // 2  # 사용된 블록 수 계산 (2개 라벨 → 1블록, 3개 라벨 → 2블록)
+    total_blocks = 10
+    rows_per_block = 9
 
-    ws.add_image(img_for_excel, "C2")
+    delete_start_row = 8 + used_blocks * rows_per_block
+    last_row = 8 + total_blocks * rows_per_block
 
-    ws.merge_cells("A8:C8")
-    ws["A8"] = qr_text
+    if delete_start_row < last_row:
+        ws.delete_rows(delete_start_row, last_row - delete_start_row)
 
     excel_io = io.BytesIO()
     wb.save(excel_io)
-
     st.download_button(
-        label="라벨 엑셀 다운로드",
+        "📥 엑셀 라벨 다운로드",
         data=excel_io.getvalue(),
-        file_name=f"label_{serial_no}.xlsx",
+        file_name="labels_all.xlsx",
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     )
-
-    try:
-        os.remove(tmp_qr_path)
-    except:
-        pass
