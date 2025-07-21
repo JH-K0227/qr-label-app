@@ -101,7 +101,7 @@ def generate_label_image(company, code, prod_date, lot_no, serial_no, item_no, s
 # Streamlit UI
 logo = Image.open("logo.png")
 st.image(logo, width=100)
-st.title("[테스트용] 다중 QR 부품 식별표 생성기")
+st.title("[TEST] QR코드 / 부품 식별표 생성")
 
 num_labels = st.number_input("생성할 라벨 개수 선택", min_value=1, max_value=10, value=1, step=1)
 label_data_list = []
