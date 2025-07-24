@@ -18,7 +18,7 @@ def convert_lot_no(date_str):
     }
     month_code = {
         1: 'A', 2: 'B', 3: 'C', 4: 'D', 5: 'E', 6: 'F',
-        7: 'G', 8: 'H', 9: 'I', 10: 'J', 11: 'K', 12: 'M'
+        7: 'G', 8: 'H', 9: 'J', 10: 'K', 11: 'M', 12: 'N'
     }
     y = date.year
     m = date.month
