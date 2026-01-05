@@ -3,6 +3,7 @@ from PIL import Image, ImageDraw, ImageFont
 import qrcode
 import io
 from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo  # ✅ PATCH: timezone-aware KST
 import openpyxl
 from openpyxl.drawing.image import Image as ExcelImage
 import tempfile
@@ -135,7 +136,9 @@ with st.form("label_form"):
     submitted = st.form_submit_button("라벨 생성하기")
 
 if submitted:
-    base_time = datetime.utcnow() + timedelta(hours=9)
+    # ✅ PATCH: datetime.utcnow() deprecated → timezone-aware KST
+    base_time = datetime.now(ZoneInfo("Asia/Seoul"))
+
     images = []
     qr_texts = []
 
@@ -164,7 +167,13 @@ if submitted:
         y = (idx // cols) * label_h
         merged_img.paste(img, (x, y))
 
-    st.image(merged_img, caption="전체 라벨 미리보기", use_container_width=False)
+    # ✅ PATCH: use_container_width → width
+    st.image(
+    merged_img,
+    caption="전체 라벨 미리보기",
+    width=min(1200, merged_img.size[0])
+)
+
     buffered = io.BytesIO()
     merged_img.save(buffered, format="PNG")
     st.download_button("📄 전체 라벨 PNG 다운로드", data=buffered.getvalue(), file_name="labels_all.png", mime="image/png")
