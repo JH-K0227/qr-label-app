@@ -171,7 +171,7 @@ if submitted:
     st.image(
     merged_img,
     caption="전체 라벨 미리보기",
-    width=min(1200, merged_img.size[0])
+    width=min(600, merged_img.size[0])
 )
 
     buffered = io.BytesIO()
@@ -242,3 +242,4 @@ if submitted:
         file_name="labels_all.xlsx",
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     )
+
